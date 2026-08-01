@@ -2,6 +2,36 @@ import json
 import os 
 
 
+def master_exists():
+    pass
+
+
+def create_master_password():
+    pass 
+
+
+def authenticate():
+    pass 
+
+
+def menu():
+    """ Display menu choices (1-5) on the CLI. """
+    print(f"\n\n{'='*21}")
+    print("   Password Manager  ")
+    print("="*21)
+    text = "1. Add Password\n2. View Passwords\n3. Search Passwords\n4. Delete Password\n5. Log out\n6. Exit"
+    print(text)
+
+    # Handle user choice input 
+    try:
+        choice = input("\nEnter (1-5): ")
+        choice = int(choice)
+    except:
+        print("Invaild Response!!\n")
+
+    return choice
+
+
 def load_passwords():
     """ Read and return the stored passwords data from 'password.json'. """
     with open('data/passwords.json', 'r') as file:
@@ -111,33 +141,48 @@ def delete_password():
 
 
 def main():
-    """ Main execution loop displaying menu choices (1-5). """
+    """ Main execution loop for password manager."""
     while True:
-        # Display menu choices 
-        print(f"\n\n{'='*21}")
-        print("   Password Manager  ")
-        print("="*21)
-        text = "1. Add Password\n2. View Passwords\n3. Search Passwords\n4. Delete Password\n5. Exit"
-        print(text)
+        # Check if a master password has been created 
+        if master_exists():
+            attempts = 0
 
-        # Handle user choice input 
-        try:
-            choice = input("\nEnter (1-5): ")
-            choice = int(choice)
-        except:
-            print("Invaild Response!!\n")
+            # Allow 3 authentication attempts
+            while (attempts < 3):
+                is_authenticated = authenticate()
+                if is_authenticated:
+                    # User menu loop 
+                    while True: 
+                        choice = menu()
 
-        # Go to selected function 
-        if choice == 1:
-            add_password()
-        elif choice == 2:
-            view_passwords()
-        elif choice == 3:
-            search_password()
-        elif choice == 4: 
-            delete_password()
-        elif choice == 5:
-            break
+                        if choice == 1:
+                            add_password()
+                        elif choice == 2:
+                            view_passwords()
+                        elif choice == 3:
+                            search_password()
+                        elif choice == 4: 
+                            delete_password()
+                        elif choice == 5:
+                            # Logout and reset attempts to 0
+                            attempts = 0
+                            break 
+                        elif choice == 6:
+                            # Exit the program 
+                            return
+                else: 
+                    # Failed attempt 
+                    print("Incorrect Password!")
+                    attempts += 1
+
+            # Exit the program after 3 failed attempts
+            if attempts == 3:
+                return
+
+        else:
+            # Create master password for the first time 
+            create_master_password()
+            continue
 
 if __name__ == "__main__":
     main()
