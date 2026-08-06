@@ -1,3 +1,5 @@
+import base64
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import getpass 
 import hashlib
 import json
@@ -16,11 +18,11 @@ def master_exists():
 def create_master_password():
     """ Create master password and store in 'master.json'. """
     # Let the user know to create the master password 
-    print("You haven't created master password yet, so create one first!")
+    print("\nYou haven't created master password yet, so create one first!")
 
     # Keep asking until the user inputs matching passwords 
     while True:
-        master_password = getpass.getpass("Enter Master Password: ")
+        master_password = getpass.getpass("\nEnter Master Password: ")
         confirm = getpass.getpass("Confirm Master Password: ")
 
         if master_password != confirm:
@@ -50,12 +52,8 @@ def create_master_password():
     with open('data/master.json', 'w') as file:
         json.dump(master_data, file, indent=4)
 
-
-def authenticate():
-    """ Authenticate the password. """
-    # Prompt the user for master password 
-    master_password = getpass.getpass("\nEnter Your Master Password: ").encode('utf-8')
-
+def get_master_data():
+    """Retrieve salt, iterations, and stored hash from master.json and return them."""
     # Load master data from the file 
     with open('data/master.json', 'r') as file:
         master_data = json.load(file)
@@ -65,14 +63,26 @@ def authenticate():
     iterations = master_data['iterations']
     stored_hash = bytes.fromhex(master_data['hash_password'])
 
+    return salt, iterations, stored_hash
+
+def authenticate():
+    """ Authenticate the password. """
+    # Prompt the user for master password 
+    master_password = getpass.getpass("\nEnter Your Master Password: ").encode('utf-8')
+
+    # Get salt, iterations, and stored hash from master.json using get_master_data()
+    salt, iterations, stored_hash = get_master_data()
+
     # Hash user input password using retrieved salt and iterations 
     hash_password = hashlib.pbkdf2_hmac('sha256', master_password, salt, iterations)
 
-    # Check wheter hashes match and return True / False 
+    # Check hashes match  
     if stored_hash == hash_password:
-        return True
+        # Return key to use in encryption for passwords 
+        key = hashlib.pbkdf2_hmac('sha256', master_password, salt, iterations, 32)
+        return key 
     else:
-        return False
+        return None
         
 
 def menu():
@@ -85,7 +95,7 @@ def menu():
 
     # Handle user choice input 
     try:
-        choice = input("\nEnter (1-5): ")
+        choice = input("\nEnter (1-6): ")
         choice = int(choice)
     except:
         print("Invaild Response!!\n")
@@ -100,13 +110,34 @@ def load_passwords():
 
     return passwords
 
+def encrypt_password(key, password):
+    """ Encrypt the password and return nonce & ciphertext. """
+    nonce = secrets.token_bytes(12)
+    password = password.encode()
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, password, None)
 
-def add_password():
+    # Change the nonce and ciphertext into a readable Base64 string 
+    nonce = base64.b64encode(nonce).decode()
+    ciphertext = base64.b64encode(ciphertext).decode()
+    return nonce, ciphertext
+
+def decrypt_password(key, nonce, ciphertext):
+    """ Decrypt the password stored in the passwords.json. """
+    nonce = base64.b64decode(nonce)
+    ciphertext = base64.b64decode(ciphertext)
+    aesgcm = AESGCM(key)
+    password = aesgcm.decrypt(nonce, ciphertext, None)
+
+    return password.decode()
+
+def add_password(key):
     """ Prompt the user for website, username, and password and update & save them into the 'passwords.json'."""
     # Collect user inputs 
     website = input("\nWebsite: ")
     username = input("Username: ")
     password = getpass.getpass("Password: ")
+    nonce, ciphertext = encrypt_password(key, password)
 
     # Check the file exists and stores data before attpemting to load
     if os.path.exists('data/passwords.json') and os.path.getsize('data/passwords.json') > 0:
@@ -117,7 +148,8 @@ def add_password():
     # Store username and password under website name 
     passwords[website] = {
         "username": username,
-        "password": password,
+        "nonce": nonce,
+        "ciphertext": ciphertext,
     }
 
     # Save updated dictionary back to 'passwords.json'
@@ -125,7 +157,7 @@ def add_password():
         json.dump(passwords, file, indent=4)
 
 
-def view_passwords():
+def view_passwords(key):
     """ Display a formatted table of stored websites and usernames, and reveal the password for user selected website. """
     try:
         passwords = load_passwords()
@@ -142,7 +174,10 @@ def view_passwords():
         # Prompt user to reveal a specific password 
         website = input("Enter the website to reveal the password: ")
         if website in passwords:
-            print(f"Password: {passwords[website]['password']}")
+            nonce = passwords[website]['nonce']
+            ciphertext = passwords[website]['ciphertext']
+            password = decrypt_password(key, nonce, ciphertext)
+            print(f"Password: {password}")
         else:
             print("There is no website with that name!")
     except FileNotFoundError:
@@ -150,12 +185,11 @@ def view_passwords():
         print("Create a password first!!\n")
 
 
-def search_password():
+def search_password(key):
     """ Search for sotred website name (case-insensitive). """
     try:
         passwords = load_passwords()
         site = input("\nSearch: ").lower()
-
 
         sites = []
         for website in passwords:
@@ -166,7 +200,10 @@ def search_password():
             for site in sites: 
                 print(f"\nWebsite: {site}")
                 print(f"Username: {passwords[site]['username']}")
-                print(f"Password: {passwords[site]['password']}")
+                nonce = passwords[site]['nonce']
+                ciphertext = passwords[site]['ciphertext']
+                password = decrypt_password(key, nonce, ciphertext)
+                print(f"Password: {password}")
         else:
             print("There is no website with that name!")
     except FileNotFoundError:
@@ -189,7 +226,7 @@ def delete_password():
             elif confirmation == 'n':
                 pass 
             else:
-                print("Invalid Response")
+                print("Invalid Response!")
         else:
             print("There is no website with that name!")
 
@@ -210,22 +247,23 @@ def main():
 
             # Allow 3 authentication attempts
             while (attempts < 3):
-                is_authenticated = authenticate()
-                if is_authenticated:
+                key = authenticate()
+                if key is not None:
                     # User menu loop 
                     while True: 
                         choice = menu()
 
                         if choice == 1:
-                            add_password()
+                            add_password(key)
                         elif choice == 2:
-                            view_passwords()
+                            view_passwords(key)
                         elif choice == 3:
-                            search_password()
+                            search_password(key)
                         elif choice == 4: 
                             delete_password()
                         elif choice == 5:
                             # Logout and reset attempts to 0
+                            key = None
                             attempts = 0
                             break 
                         elif choice == 6:
@@ -238,6 +276,7 @@ def main():
 
             # Exit the program after 3 failed attempts
             if attempts == 3:
+                print("\nYour attempt limit has been reached. Run the program again!\n")
                 return
 
         else:
