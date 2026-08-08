@@ -4,7 +4,54 @@ import getpass
 import hashlib
 import json
 import os 
+import string
 import secrets
+
+def main():
+    """ Main execution loop for password manager."""
+    while True:
+        # Check if a master password has been created 
+        if master_exists():
+            attempts = 0
+
+            # Allow 3 authentication attempts
+            while (attempts < 3):
+                key = authenticate()
+                if key is not None:
+                    # User menu loop 
+                    while True: 
+                        choice = menu()
+
+                        if choice == 1:
+                            add_password(key)
+                        elif choice == 2:
+                            view_passwords(key)
+                        elif choice == 3:
+                            search_password(key)
+                        elif choice == 4: 
+                            delete_password()
+                        elif choice == 5:
+                            # Logout and reset attempts to 0
+                            key = None
+                            attempts = 0
+                            break 
+                        elif choice == 6:
+                            # Exit the program 
+                            return
+                else: 
+                    # Failed attempt 
+                    print("Incorrect Password!")
+                    attempts += 1
+
+            # Exit the program after 3 failed attempts
+            if attempts == 3:
+                print("\nYour attempt limit has been reached. Run the program again!\n")
+                return
+
+        else:
+            # Create master password for the first time 
+            create_master_password()
+            continue
 
 
 def master_exists():
@@ -52,6 +99,7 @@ def create_master_password():
     with open('data/master.json', 'w') as file:
         json.dump(master_data, file, indent=4)
 
+
 def get_master_data():
     """Retrieve salt, iterations, and stored hash from master.json and return them."""
     # Load master data from the file 
@@ -64,6 +112,7 @@ def get_master_data():
     stored_hash = bytes.fromhex(master_data['hash_password'])
 
     return salt, iterations, stored_hash
+
 
 def authenticate():
     """ Authenticate the password. """
@@ -110,6 +159,7 @@ def load_passwords():
 
     return passwords
 
+
 def encrypt_password(key, password):
     """ Encrypt the password and return nonce & ciphertext. """
     nonce = secrets.token_bytes(12)
@@ -122,6 +172,7 @@ def encrypt_password(key, password):
     ciphertext = base64.b64encode(ciphertext).decode()
     return nonce, ciphertext
 
+
 def decrypt_password(key, nonce, ciphertext):
     """ Decrypt the password stored in the passwords.json. """
     nonce = base64.b64decode(nonce)
@@ -131,12 +182,65 @@ def decrypt_password(key, nonce, ciphertext):
 
     return password.decode()
 
+
+def random_password_generator():
+    """ 
+    Generate a sixteen digits password with at least one lowercase, one uppercase, three special characters, 
+    and three numbers radomly and return it.
+    """
+    # Combine letters, special characters, and  numbers in one variable 
+    characters = string.ascii_letters + string.punctuation + string.digits
+
+    # Loop until a generated password meets all requirements
+    while True:
+        password = ''.join(secrets.choice(characters) for i in range(16))
+        if (any(c.islower() for c in password) 
+                and any(c.isupper() for c in password) 
+                and sum(c in string.punctuation for c in password) >= 3
+                and sum(c.isdigit() for c in password) >= 3):
+                break # Exit the loop 
+        
+    return password
+    
+
+def random_or_custom():
+    """ 
+    Ask the user whether he/she wants random sixteen digits passwords or wants to create his/her custom password, and 
+    return the password. 
+    """
+    print("\nDo you want to create random sixteen digits password or your own custom password?")
+
+    # Keep asking until the user enters a vaild choice 
+    while True:
+        answer = input("Enter 'random' or 'custom': ").lower()
+
+        # Decide random or custom password based on the user input  
+        if answer == 'random':
+            password = random_password_generator()
+        elif answer == 'custom':
+            password = getpass.getpass("Password: ")
+        else:
+            print("Invalid Response!\n")
+            continue
+
+        break # Exit the loop 
+
+    # Display the successful message 
+    print("\nDone!")
+
+    return password
+
+
 def add_password(key):
     """ Prompt the user for website, username, and password and update & save them into the 'passwords.json'."""
     # Collect user inputs 
     website = input("\nWebsite: ")
     username = input("Username: ")
-    password = getpass.getpass("Password: ")
+
+    # Create random or custom password 
+    password = random_or_custom()
+
+    # Encrypt the password 
     nonce, ciphertext = encrypt_password(key, password)
 
     # Check the file exists and stores data before attpemting to load
@@ -172,7 +276,7 @@ def view_passwords(key):
             print(f" {website:<15} {username}")
 
         # Prompt user to reveal a specific password 
-        website = input("Enter the website to reveal the password: ")
+        website = input("\nEnter the website to reveal the password: ")
         if website in passwords:
             nonce = passwords[website]['nonce']
             ciphertext = passwords[website]['ciphertext']
@@ -237,52 +341,6 @@ def delete_password():
         # Handle if 'passwords.json' has not been created yet 
         print("Create a password first!!")
 
-
-def main():
-    """ Main execution loop for password manager."""
-    while True:
-        # Check if a master password has been created 
-        if master_exists():
-            attempts = 0
-
-            # Allow 3 authentication attempts
-            while (attempts < 3):
-                key = authenticate()
-                if key is not None:
-                    # User menu loop 
-                    while True: 
-                        choice = menu()
-
-                        if choice == 1:
-                            add_password(key)
-                        elif choice == 2:
-                            view_passwords(key)
-                        elif choice == 3:
-                            search_password(key)
-                        elif choice == 4: 
-                            delete_password()
-                        elif choice == 5:
-                            # Logout and reset attempts to 0
-                            key = None
-                            attempts = 0
-                            break 
-                        elif choice == 6:
-                            # Exit the program 
-                            return
-                else: 
-                    # Failed attempt 
-                    print("Incorrect Password!")
-                    attempts += 1
-
-            # Exit the program after 3 failed attempts
-            if attempts == 3:
-                print("\nYour attempt limit has been reached. Run the program again!\n")
-                return
-
-        else:
-            # Create master password for the first time 
-            create_master_password()
-            continue
-
+# Ensure code execute only when the script is run directly 
 if __name__ == "__main__":
     main()
