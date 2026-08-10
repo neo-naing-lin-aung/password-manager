@@ -4,5 +4,4 @@ __pycache__/
 .venv/
 venv/
 
-data/passwords.json
-data/master.json 
+data/*

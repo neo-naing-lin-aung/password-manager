@@ -183,6 +183,26 @@ def decrypt_password(key, nonce, ciphertext):
     return password.decode()
 
 
+def check_password_strength(password):
+    """ Check the password strength for custom password. """
+    while True:
+        # Check the password contins at least 8 characters, one lowercase, 1 upper case, 1 number, and one special 
+        if (len(password) >= 8
+            and any(c.islower() for c in password) 
+            and any(c.isupper() for c in password) 
+            and any(c in string.punctuation for c in password)
+            and any(c.isdigit() for c in password)):
+            # Exit the loop 
+            break
+        else:
+            # Prompt the user for the password 
+            text = "\nYour password must contains:\n\t~ At least 8 characters\n\t~ One uppercase letter\n\t"
+            text += "~ One lowercase letter\n\t~ One number\n\t~ One special character\n"
+            print(text)
+            password = getpass.getpass("Password: ")
+            continue
+
+
 def random_password_generator():
     """ 
     Generate a sixteen digits password with at least one lowercase, one uppercase, three special characters, 
@@ -218,7 +238,13 @@ def random_or_custom():
         if answer == 'random':
             password = random_password_generator()
         elif answer == 'custom':
+            text = "\nPassword requirements:\n\t~ At least 8 characters\n\t~ One uppercase letter\n\t"
+            text += "~ One lowercase letter\n\t~ One number\n\t~ One special character\n"
+            print(text)
             password = getpass.getpass("Password: ")
+
+            # Check the password strength 
+            check_password_strength(password)
         else:
             print("Invalid Response!\n")
             continue
@@ -226,11 +252,11 @@ def random_or_custom():
         break # Exit the loop 
 
     # Display the successful message 
-    print("\nDone!")
+    print("\nSuccessful!")
 
     return password
 
-
+        
 def add_password(key):
     """ Prompt the user for website, username, and password and update & save them into the 'passwords.json'."""
     # Collect user inputs 
