@@ -4,6 +4,7 @@ import getpass
 import hashlib
 import json
 import os 
+import pyperclip
 import string
 import secrets
 
@@ -136,7 +137,7 @@ def authenticate():
 
 def menu():
     """ Display menu choices (1-5) on the CLI. """
-    print(f"\n\n{'='*21}")
+    print(f"\n{'='*21}")
     print("   Password Manager  ")
     print("="*21)
     text = "1. Add Password\n2. View Passwords\n3. Search Passwords\n4. Delete Password\n5. Log out\n6. Exit"
@@ -287,11 +288,26 @@ def add_password(key):
         json.dump(passwords, file, indent=4)
 
 
+def copy_password(password):
+    """ Prompt the user to copy the password. """
+    copy = input("\nDo you want to copy the password?(y/n) ").lower()
+    if copy == 'y':
+        print("Done!")
+        pyperclip.copy(password)
+    elif copy == 'n':
+        pass 
+    else:
+        print("\nInvalid Response!")
+
+
 def view_passwords(key):
     """ Display a formatted table of stored websites and usernames, and reveal the password for user selected website. """
     try:
         passwords = load_passwords()
-
+    except FileNotFoundError:
+        # Handle if 'passwords.json' has not been created yet 
+        print("Create a password first!!\n")
+    else:
         # Display table header 
         print(f"\n {'Website':<15} {'Username'}")
         print("-" * 25)
@@ -301,18 +317,21 @@ def view_passwords(key):
             username = value['username']
             print(f" {website:<15} {username}")
 
-        # Prompt user to reveal a specific password 
-        website = input("\nEnter the website to reveal the password: ")
+        # Prompt user to reveal a password with the website name
+        website = input("\nEnter the website to reveal the password (enter 'q' to quit!): ")
         if website in passwords:
             nonce = passwords[website]['nonce']
             ciphertext = passwords[website]['ciphertext']
             password = decrypt_password(key, nonce, ciphertext)
             print(f"Password: {password}")
+
+            # Prompt the user to copy the password 
+            copy_password(password)
+
+        elif website == 'q':
+            pass 
         else:
             print("There is no website with that name!")
-    except FileNotFoundError:
-        # Handle if 'passwords.json' has not been created yet 
-        print("Create a password first!!\n")
 
 
 def search_password(key):
@@ -330,10 +349,21 @@ def search_password(key):
             for site in sites: 
                 print(f"\nWebsite: {site}")
                 print(f"Username: {passwords[site]['username']}")
-                nonce = passwords[site]['nonce']
-                ciphertext = passwords[site]['ciphertext']
+
+            # Prompt user to reveal a password with the website name
+            website = input("\nEnter the website to reveal the password (enter 'q' to quit!): ")
+            if website in sites:
+                nonce = passwords[website]['nonce']
+                ciphertext = passwords[website]['ciphertext']
                 password = decrypt_password(key, nonce, ciphertext)
                 print(f"Password: {password}")
+
+                # Prompt the user to copy the password
+                copy_password(password)
+            elif website == 'q':
+                pass
+            else:
+                print("There is no website with that name!")
         else:
             print("There is no website with that name!")
     except FileNotFoundError:
@@ -345,7 +375,7 @@ def delete_password():
     """ Delete a specific stored website from 'passwords.json'. """
     try: 
         passwords = load_passwords()
-        website = input("\nDelete Website: ")
+        website = input("\nWebsite: ")
 
         # Confirm deleteion if website exists 
         if website in passwords:
